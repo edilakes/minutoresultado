@@ -1,0 +1,298 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <title>Minuto y Resultado – Actuaciones</title>
+    <style>
+        body {
+            font-family: Segoe UI, Roboto, sans-serif;
+            margin: 0;
+            background: #f5f6fa;
+        }
+
+        header {
+            background: #003366;
+            color: white;
+            padding: 20px;
+            font-size: 24px;
+            font-weight: bold;
+        }
+
+        .kpis {
+            display: flex;
+            gap: 20px;
+            padding: 20px;
+            flex-wrap: wrap;
+        }
+
+        .kpi {
+            flex: 1 1 200px;
+            background: white;
+            padding: 20px;
+            border-radius: 10px;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+            text-align: center;
+        }
+
+        .kpi .value {
+            font-size: 32px;
+            font-weight: bold;
+        }
+
+        .filters {
+            padding: 0 20px 10px 20px;
+            display: flex;
+            gap: 20px;
+            flex-wrap: wrap;
+        }
+
+        select, input {
+            padding: 8px 10px;
+            border-radius: 6px;
+            border: 1px solid #ccc;
+            font-size: 14px;
+            min-width: 180px;
+        }
+
+        .lista {
+            padding: 20px;
+        }
+
+        .card {
+            background: white;
+            padding: 16px 20px;
+            border-radius: 12px;
+            margin-bottom: 12px;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.08);
+            border-left: 10px solid #ccc;
+        }
+
+        .titulo {
+            font-weight: 600;
+            font-size: 16px;
+            margin-bottom: 4px;
+        }
+
+        .estado {
+            font-weight: 600;
+            margin-bottom: 4px;
+            font-size: 14px;
+        }
+
+        .alerta {
+            color: #b30000;
+            font-weight: 600;
+            margin-top: 4px;
+        }
+
+        .linea {
+            font-size: 13px;
+            color: #444;
+            margin-top: 2px;
+        }
+
+        .responsable {
+            margin-top: 6px;
+            font-size: 13px;
+        }
+
+        .progreso {
+            margin-top: 4px;
+            font-size: 13px;
+        }
+
+        .meta {
+            margin-top: 4px;
+            font-size: 12px;
+            color: #666;
+        }
+
+        /* Colores de macroestado */
+        .pendiente { border-color: #999; }
+        .licitacion { border-color: #e6b800; }
+        .redaccion { border-color: #ffcc00; }
+        .proyecto { border-color: #3399ff; }
+        .licitacion-obra { border-color: #ff8800; }
+        .ejecucion { border-color: #0066cc; }
+        .finalizada { border-color: #33aa33; }
+        .alerta-critica { border-color: #cc0000; }
+    </style>
+</head>
+<body>
+
+<header>Minuto y Resultado – Actuaciones</header>
+
+<div class="kpis">
+    <div class="kpi">
+        <div class="value" id="kpi-total">0</div>
+        Total actuaciones
+    </div>
+    <div class="kpi">
+        <div class="value" id="kpi-curso">0</div>
+        En curso
+    </div>
+    <div class="kpi">
+        <div class="value" id="kpi-alertas">0</div>
+        Con alerta
+    </div>
+    <div class="kpi">
+        <div class="value" id="kpi-finalizadas">0</div>
+        Finalizadas
+    </div>
+</div>
+
+<div class="filters">
+    <select id="filtro-provincia">
+        <option value="">Provincia</option>
+    </select>
+
+    <select id="filtro-organo">
+        <option value="">Órgano gestor</option>
+    </select>
+
+    <select id="filtro-macro">
+        <option value="">Macroestado</option>
+        <option value="pendiente">Pendiente</option>
+        <option value="licitacion">Licitación</option>
+        <option value="redaccion">Redacción</option>
+        <option value="proyecto">Proyecto recibido</option>
+        <option value="licitacion-obra">Licitación obra</option>
+        <option value="ejecucion">Ejecución</option>
+        <option value="finalizada">Finalizada</option>
+    </select>
+
+    <input id="filtro-texto" type="text" placeholder="Buscar actuación, centro, FE04, operación…">
+</div>
+
+<div class="lista" id="lista"></div>
+
+<script>
+let actuaciones = [];
+
+// 1. Cargar datos desde el servidor remoto
+fetch("http://SEP00000C1Q7.DMSAS.sda.sas.junta-andalucia.es:5000/actuaciones_resumen")
+    .then(r => r.json())
+    .then(data => {
+        actuaciones = data;
+        inicializarFiltros(data);
+        render();
+    })
+    .catch(err => {
+        document.getElementById("lista").innerHTML =
+            "<p>Error cargando datos: " + err + "</p>";
+    });
+
+function inicializarFiltros(data) {
+    const selProv = document.getElementById("filtro-provincia");
+    const selOrg = document.getElementById("filtro-organo");
+
+    const provincias = [...new Set(data.map(a => a.Provincia).filter(Boolean))].sort();
+    provincias.forEach(p => {
+        const opt = document.createElement("option");
+        opt.value = p;
+        opt.textContent = p;
+        selProv.appendChild(opt);
+    });
+
+    const organos = [...new Set(data.map(a => a.OrganoGestor).filter(Boolean))].sort();
+    organos.forEach(o => {
+        const opt = document.createElement("option");
+        opt.value = o;
+        opt.textContent = o;
+        selOrg.appendChild(opt);
+    });
+
+    selProv.onchange = render;
+    selOrg.onchange = render;
+    document.getElementById("filtro-macro").onchange = render;
+    document.getElementById("filtro-texto").oninput = render;
+}
+
+function render() {
+    const lista = document.getElementById("lista");
+    lista.innerHTML = "";
+
+    const prov = document.getElementById("filtro-provincia").value;
+    const org = document.getElementById("filtro-organo").value;
+    const macro = document.getElementById("filtro-macro").value;
+    const txt = document.getElementById("filtro-texto").value.toLowerCase();
+
+    let filtradas = actuaciones.filter(a => {
+        if (prov && a.Provincia !== prov) return false;
+        if (org && a.OrganoGestor !== org) return false;
+        if (macro && a.Macroestado !== macro) return false;
+
+        if (txt) {
+            const blob = [
+                a.CodActuacion,
+                a.CentroSanitario,
+                a.Provincia,
+                a.OrganoGestor,
+                a.Medida,
+                a.FE04,
+                a.Operacion
+            ].join(" ").toLowerCase();
+            if (!blob.includes(txt)) return false;
+        }
+        return true;
+    });
+
+    actualizarKPIs(filtradas);
+
+    filtradas.forEach(a => {
+        const card = document.createElement("div");
+        const macro = a.Macroestado || "pendiente";
+        const alerta = a.Alerta || "";
+        const claseAlerta = alerta.includes("crítica") ? " alerta-critica" : "";
+
+        card.className = "card " + macro + claseAlerta;
+
+        const macroLabel = macroLabelHumano(macro);
+
+        card.innerHTML = `
+            <div class="estado">${macroLabel}</div>
+            <div class="titulo">${a.CentroSanitario || "(Centro sin nombre)"} – ${a.Medida || ""}</div>
+            <div class="linea">
+                <strong>Actuación:</strong> ${a.CodActuacion || ""} 
+                &nbsp;|&nbsp; <strong>Provincia:</strong> ${a.Provincia || ""}
+                &nbsp;|&nbsp; <strong>Órgano gestor:</strong> ${a.OrganoGestor || ""}
+            </div>
+            <div class="linea">
+                <strong>FE04:</strong> ${a.FE04 || ""} 
+                &nbsp;|&nbsp; <strong>Operación:</strong> ${a.Operacion || ""}
+            </div>
+            ${alerta ? `<div class="alerta">${alerta}</div>` : ""}
+            <div class="responsable">Responsable actual: <strong>${a.ResponsableActual || "—"}</strong></div>
+            <div class="progreso">Progreso estimado: ${a.ProgresoEstimado ?? 0}%</div>
+            <div class="meta">ID actuación: ${a.IDActuacion ?? ""}</div>
+        `;
+
+        lista.appendChild(card);
+    });
+}
+
+function macroLabelHumano(m) {
+    if (m === "pendiente") return "Pendiente de iniciar";
+    if (m === "licitacion") return "En licitación (proyecto / Pr+DO)";
+    if (m === "redaccion") return "En redacción de proyecto / Pr+DO";
+    if (m === "proyecto") return "Proyecto recibido";
+    if (m === "licitacion-obra") return "Licitación de obra";
+    if (m === "ejecucion") return "Obra en ejecución";
+    if (m === "finalizada") return "Actuación finalizada";
+    return m;
+}
+
+function actualizarKPIs(data) {
+    document.getElementById("kpi-total").textContent = data.length;
+    document.getElementById("kpi-finalizadas").textContent =
+        data.filter(a => a.Macroestado === "finalizada").length;
+    document.getElementById("kpi-curso").textContent =
+        data.filter(a => ["licitacion", "redaccion", "proyecto", "licitacion-obra", "ejecucion"]
+            .includes(a.Macroestado)).length;
+    document.getElementById("kpi-alertas").textContent =
+        data.filter(a => a.Alerta && a.Alerta !== "").length;
+}
+</script>
+
+</body>
+</html>

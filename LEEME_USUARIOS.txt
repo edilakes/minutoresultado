@@ -1,0 +1,13 @@
+USO DE LA APLICACIÓN “MINUTO Y RESULTADO”
+
+No es necesario instalar nada.
+
+1. Abra el archivo “portada.html” haciendo doble clic.
+2. La aplicación se abrirá en su navegador (Chrome, Edge o Firefox).
+3. Los datos se cargarán automáticamente desde el servidor corporativo.
+4. Puede filtrar por provincia, órgano gestor, macroestado o texto.
+5. Las tarjetas muestran el estado actual, responsable y alertas.
+
+Si la aplicación no carga:
+- Compruebe que está conectado a la red corporativa SAS.
+- Compruebe que el servidor SEP00000C1Q7 está accesible.

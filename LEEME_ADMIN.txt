@@ -1,0 +1,23 @@
+REQUISITOS DEL SERVIDOR
+
+1. El backend Flask debe ejecutarse en:
+   http://SEP00000C1Q7.DMSAS.sda.sas.junta-andalucia.es:5000
+
+2. Flask debe arrancar con:
+   app.run(host="0.0.0.0", port=5000)
+
+3. CORS debe estar activado:
+   from flask_cors import CORS
+   CORS(app)
+
+4. La base de datos Access debe estar accesible desde el servidor:
+   \\nas.cifs.cti-sevilla.sas.junta-andalucia.es\SSCC-CONSTITUCION-1\SSCC\Sb-ServiciosGestionCentros\FondosEuropeos\Database_be.accdb
+
+5. El servidor debe tener permisos de lectura sobre la carpeta del NAS.
+
+6. Los usuarios NO necesitan acceso al NAS.
+   El backend es quien accede a la base.
+
+7. Para actualizar la aplicación:
+   - Reemplazar “portada.html” por la nueva versión.
+   - No es necesario modificar nada en los equipos cliente.

@@ -1,0 +1,10 @@
+CHECKLIST DE DESPLIEGUE
+
+[ ] 1. El servidor SEP00000C1Q7 responde a ping.
+[ ] 2. El puerto 5000 está abierto en la red SAS.
+[ ] 3. http://SEP00000C1Q7:5000/actuaciones_resumen devuelve JSON.
+[ ] 4. El archivo portada.html contiene la URL correcta del servidor.
+[ ] 5. El NAS es accesible desde el servidor (Test-Path en PowerShell).
+[ ] 6. La base Access no está bloqueada en modo exclusivo.
+[ ] 7. CORS está activado en Flask.
+[ ] 8. Los usuarios pueden abrir portada.html sin errores.
