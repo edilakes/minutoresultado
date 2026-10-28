@@ -170,7 +170,7 @@
 let actuaciones = [];
 
 // 1. Cargar datos desde el servidor remoto
-fetch("http://SEP00000C1Q7.DMSAS.sda.sas.junta-andalucia.es:5000/actuaciones_resumen")
+fetch("http://localhost:5000/actuaciones_resumen")
     .then(r => r.json())
     .then(data => {
         actuaciones = data;

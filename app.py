@@ -1,3 +1,4 @@
+import os
 from flask import Flask, jsonify
 from flask_cors import CORS
 import pyodbc
@@ -5,16 +6,18 @@ import pyodbc
 app = Flask(__name__)
 CORS(app)
 
-# -----------------------------
-# 1. Conexión a la base en NAS
-# -----------------------------
+DB_BE = os.environ.get(
+    "MR_DB_BE",
+    r"\\nas.cifs.cti-sevilla.sas.junta-andalucia.es\SSCC-CONSTITUCION-1\SSCC"
+    r"\Sb-ServiciosGestionCentros\FondosEuropeos\Database_be.accdb"
+)
+
 def conectar():
-    DB_PATH = r"\\nas.cifs.cti-sevilla.sas.junta-andalucia.es\SSCC-CONSTITUCION-1\SSCC\Sb-ServiciosGestionCentros\FondosEuropeos\Database_be.accdb"
     conn_str = (
         r"Driver={Microsoft Access Driver (*.mdb, *.accdb)};"
-        fr"DBQ={DB_PATH};"
+        fr"DBQ={DB_BE};ReadOnly=1;"
     )
-    return pyodbc.connect(conn_str)
+    return pyodbc.connect(conn_str, readonly=True, autocommit=True)
 
 
 # -----------------------------

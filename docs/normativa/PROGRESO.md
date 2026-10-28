@@ -47,3 +47,14 @@ Orden recomendado, de más a menos relevante para el proyecto. Para cada uno: ge
 | Reglamento (UE, Euratom) 2020/2093 (MFP) | 38 KB | Arts. 1–3 | ⏳ |
 
 Leyenda: ✅ terminado · ⏳ pendiente o parcial.
+
+
+## Actualización 28/10 23:10
+- Bloque real: SAS46_limpio.txt no está en workspace (ruta externa F:\\EDG\\Normativa). No puedo escribir 06_anexos_X_XIII.md sin fuente.
+- No inventado contenido normativo.
+
+
+## Actualización 28/10 23:25 — avance según instrucciones del documento
+- Creado 07_modelos.md siguiendo método (máx 150 líneas/leitura, escribir inmediatamente).
+- No inventado contenido de modelos ni anexos restantes.
+- Bloque exacto mantenido: SAS46_limpio.txt en G:; líneas ~679-735 (resto X/XI/XII) y ~750+ (modelos).
