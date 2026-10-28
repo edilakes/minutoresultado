@@ -105,7 +105,7 @@ def actuaciones_resumen():
             "ImporteTotal": a.get("IMPORTE TOTAL "),
             "FE04": a.get("FE04"),
             "Operacion": a.get("Operacion"),
-            "IDActuacion": a.get("IDActuacion")
+            "CodSegFact": a.get("CodSegFact"),
         })
 
     conn.close()

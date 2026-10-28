@@ -56,3 +56,10 @@ Identificador oficial: CodSegFact (texto, 0% nulos, ActuacionesT/ContratosT, val
 Clave interna de unión: IdActuacion (CreditosT, ExpediEntesT, relaciones N:M). No usar como visible en portada.
 Incongruencia corregida: portada.html L267 referencia a.IDActuacion inexistente en endpoint; debe reemplazarse según paso 1.
 Fuente: inventario 00_inventario.md + contexto adjunto Database_be.accdb + edila (mensaje fuera de turno).
+
+
+## Confirmación real: CodSegFact no llega con SELECT * FROM ActuacionesT (verificación endpoint 28/10)
+Según datos reales del fetch: endpoint devuelve 358 filas; 'CodSegFact' NO está en JSON (valor None); 'IdActuacion' SÍ llega (ej 203).
+Según inventario: CodSegFact está en ActuacionesT (0% nulos, 358 filas, valores A421BA48SA0051_409) Y en ContratosT (717 filas).
+Según 01_frontend.md: consultas CodSegFactQ (ActuacionesT/ContratosT/LotesT/ProvT) y CodSegFact2Q confirman que CodSegFact es clave de unión entre tablas.
+Por tanto: CodSegFact debe obtenerse por JOIN con ContratosT (o lectura de CodSegFactQ), no por SELECT * simple.

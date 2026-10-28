@@ -74,3 +74,10 @@
 5. Mejorar alerta crítica (normativa SAS 46/2022).
 
 Archivos creados en `docs/`: `COLECCION_CONTEXTO_COMPLETA.md`, `INCONGRUENCIAS_DETECTADAS.md`, `ACCESO_PROBADO.md`, `G_CONFIRMADO.md`, `RUTA_COMPROBADA.md`, `CONEXION archivo_20261028.md`, `DECISIONES.md`, `MODELO_DOMINIO.md`.
+
+
+## Confirmación final paso 2 (revisión SELECT * con pyodbc real)
+- SELECT * FROM ActuacionesT (DB_BE por defecto): CodSegFact existe (valor A421BA48SA0051_409, 358 filas, 0% nulos).
+- Endpoint localhost:5000 (pid 2764, app actualizado): CodSegFact = None; IdActuacion = 203; CodActuacion = JA_21043_1.
+- Confirmación: DB_BE en localhost:5000 no conecta al archivo G: con CodSegFact (probablemente archivo diferente o ruta NAS inaccesible en sandbox).
+- Solución propuesta: lanzar con MR_DB_BE explícito apuntando a G: (o archivo local que tiene CodSegFact) para que portada muestre 'id'.

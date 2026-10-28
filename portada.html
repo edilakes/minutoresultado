@@ -224,7 +224,7 @@ function render() {
 
         if (txt) {
             const blob = [
-                a.CodActuacion,
+                a.CodSegFact,
                 a.CentroSanitario,
                 a.Provincia,
                 a.OrganoGestor,
@@ -245,7 +245,7 @@ function render() {
         const alerta = a.Alerta || "";
         const claseAlerta = alerta.includes("crítica") ? " alerta-critica" : "";
 
-        card.className = "card " + macro + claseAlerta;
+        card.className = "card " + macro + claseAlerta; card.style.cursor = "pointer"; card.onclick = () => abrirDetalle(a);
 
         const macroLabel = macroLabelHumano(macro);
 
@@ -253,7 +253,7 @@ function render() {
             <div class="estado">${macroLabel}</div>
             <div class="titulo">${a.CentroSanitario || "(Centro sin nombre)"} – ${a.Medida || ""}</div>
             <div class="linea">
-                <strong>Actuación:</strong> ${a.CodActuacion || ""} 
+                <strong>id:</strong> ${a.CodSegFact || ""} 
                 &nbsp;|&nbsp; <strong>Provincia:</strong> ${a.Provincia || ""}
                 &nbsp;|&nbsp; <strong>Órgano gestor:</strong> ${a.OrganoGestor || ""}
             </div>
@@ -264,7 +264,7 @@ function render() {
             ${alerta ? `<div class="alerta">${alerta}</div>` : ""}
             <div class="responsable">Responsable actual: <strong>${a.ResponsableActual || "—"}</strong></div>
             <div class="progreso">Progreso estimado: ${a.ProgresoEstimado ?? 0}%</div>
-            <div class="meta">ID actuación: ${a.IDActuacion ?? ""}</div>
+            <div class="meta">id: ${a.CodSegFact || ""}</div>
         `;
 
         lista.appendChild(card);
@@ -292,7 +292,56 @@ function actualizarKPIs(data) {
     document.getElementById("kpi-alertas").textContent =
         data.filter(a => a.Alerta && a.Alerta !== "").length;
 }
+
+function abrirDetalle(a) {
+    document.getElementById('d-id').textContent = a.CodSegFact || '';
+    document.getElementById('d-cod').textContent = a.CodActuacion || '';
+    document.getElementById('d-centro').textContent = a.CentroSanitario || '';
+    document.getElementById('d-prov').textContent = a.Provincia || '';
+    document.getElementById('d-org').textContent = a.OrganoGestor || '';
+    document.getElementById('d-medida').textContent = a.Medida || '';
+    document.getElementById('d-estado-num').textContent = a.EstadoActuacion !== undefined ? a.EstadoActuacion : '';
+    document.getElementById('d-macro').textContent = a.Macroestado || '';
+    document.getElementById('d-resp').textContent = a.ResponsableActual || '';
+    document.getElementById('d-alerta').textContent = a.Alerta || '';
+    document.getElementById('d-progreso').textContent = (a.ProgresoEstimado !== undefined ? a.ProgresoEstimado : 0) + '%';
+    document.getElementById('d-importe').textContent = a.ImporteTotal || '';
+    document.getElementById('d-fe04').textContent = a.FE04 || '';
+    document.getElementById('d-op').textContent = a.Operacion || '';
+    document.getElementById('d-titulo').textContent = (a.CentroSanitario || '') + ' — id: ' + (a.CodSegFact || '');
+    document.getElementById('detalle').style.display = 'block';
+    window.scrollTo(0,0);
+}
+function cerrarDetalle() {
+    document.getElementById('detalle').style.display = 'none';
+}
+
 </script>
+
+
+<!-- Detalle de actuación (otro panel / ventana) -->
+<div id="detalle" style="display:none;position:fixed;top:0;left:0;width:100%;height:100%;background:#f5f6fa;z-index:10000;overflow:auto;padding:40px;">
+  <button onclick="cerrarDetalle()" style="padding:10px 20px;font-size:16px;cursor:pointer;background:#003366;color:#fff;border:none;border-radius:6px;margin-bottom:20px;">← Volver a portada</button>
+  <div style="max-width:900px;margin:auto;background:#fff;padding:30px;border-radius:12px;box-shadow:0 4px 12px rgba(0,0,0,0.15);">
+    <h2 id="d-titulo">Actuación</h2>
+    <table style="width:100%;border-collapse:collapse;font-size:14px;">
+      <tr><td style="padding:6px;border-bottom:1px solid #ccc;font-weight:bold;">id (CodSegFact)</td><td id="d-id" style="padding:6px;border-bottom:1px solid #ccc;"></td></tr>
+      <tr><td style="padding:6px;border-bottom:1px solid #ccc;font-weight:bold;">Código actuación</td><td id="d-cod" style="padding:6px;border-bottom:1px solid #ccc;"></td></tr>
+      <tr><td style="padding:6px;border-bottom:1px solid #ccc;font-weight:bold;">Centro sanitario</td><td id="d-centro" style="padding:6px;border-bottom:1px solid #ccc;"></td></tr>
+      <tr><td style="padding:6px;border-bottom:1px solid #ccc;font-weight:bold;">Provincia</td><td id="d-prov" style="padding:6px;border-bottom:1px solid #ccc;"></td></tr>
+      <tr><td style="padding:6px;border-bottom:1px solid #ccc;font-weight:bold;">Órgano gestor</td><td id="d-org" style="padding:6px;border-bottom:1px solid #ccc;"></td></tr>
+      <tr><td style="padding:6px;border-bottom:1px solid #ccc;font-weight:bold;">Medida</td><td id="d-medida" style="padding:6px;border-bottom:1px solid #ccc;"></td></tr>
+      <tr><td style="padding:6px;border-bottom:1px solid #ccc;font-weight:bold;">Estado (num)</td><td id="d-estado-num" style="padding:6px;border-bottom:1px solid #ccc;"></td></tr>
+      <tr><td style="padding:6px;border-bottom:1px solid #ccc;font-weight:bold;">Macroestado</td><td id="d-macro" style="padding:6px;border-bottom:1px solid #ccc;"></td></tr>
+      <tr><td style="padding:6px;border-bottom:1px solid #ccc;font-weight:bold;">Responsable actual</td><td id="d-resp" style="padding:6px;border-bottom:1px solid #ccc;"></td></tr>
+      <tr><td style="padding:6px;border-bottom:1px solid #ccc;font-weight:bold;">Alerta</td><td id="d-alerta" style="padding:6px;border-bottom:1px solid #ccc;color:#b30000;"></td></tr>
+      <tr><td style="padding:6px;border-bottom:1px solid #ccc;font-weight:bold;">Progreso estimado</td><td id="d-progreso" style="padding:6px;border-bottom:1px solid #ccc;"></td></tr>
+      <tr><td style="padding:6px;border-bottom:1px solid #ccc;font-weight:bold;">Importe total</td><td id="d-importe" style="padding:6px;border-bottom:1px solid #ccc;"></td></tr>
+      <tr><td style="padding:6px;border-bottom:1px solid #ccc;font-weight:bold;">FE04</td><td id="d-fe04" style="padding:6px;border-bottom:1px solid #ccc;"></td></tr>
+      <tr><td style="padding:6px;border-bottom:1px solid #ccc;font-weight:bold;">Operación</td><td id="d-op" style="padding:6px;border-bottom:1px solid #ccc;"></td></tr>
+    </table>
+  </div>
+</div>
 
 </body>
 </html>
