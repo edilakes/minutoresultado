@@ -122,6 +122,7 @@
 <body>
 
 <div style="position:relative;display:inline-block;">
+  <button onclick="document.getElementById('filtro-provincia').value='';document.getElementById('filtro-organo').value='';document.getElementById('filtro-macro').value='';document.getElementById('filtro-texto').value='';render();" style="margin-left:8px;padding:8px 14px;background:#003366;color:#fff;border:none;border-radius:4px;cursor:pointer;">Ver datos</button>
   <button onclick="document.getElementById('settings-dropdown').style.display='block'" style="padding:8px 14px;background:#003366;color:#fff;border:none;border-radius:4px;cursor:pointer;">⚙ Settings</button>
   <div id="settings-dropdown" style="display:none;position:absolute;top:100%;left:0;background:#fff;border:1px solid #ccc;border-radius:4px;padding:8px;box-shadow:0 2px 8px rgba(0,0,0,0.15);min-width:160px;z-index:10;">
     <label style="font-size:13px;color:#003366;cursor:pointer;display:block;padding:4px 0;">
@@ -133,6 +134,7 @@
 
 <header>Minuto y Resultado – Actuaciones</header>
 
+<div id="last-update" style="padding:10px 20px;color:#555;font-size:13px;">Última actualización: —</div>
 <div class="kpis">
     <div class="kpi">
         <div class="value" id="kpi-total">0</div>
@@ -179,6 +181,8 @@
 
 <script>
 let actuaciones = [];
+// Recuperar de localStorage si existe
+try { const saved = localStorage.getItem('minutoresultado'); if(saved) { const parsed = JSON.parse(saved); if(Array.isArray(parsed) && parsed.length>0) { actuaciones = parsed; if(document.getElementById('lista')) { inicializarFiltros(actuaciones); render(); } else { setTimeout(()=>{ inicializarFiltros(actuaciones); render(); }, 100); } document.getElementById('lista').innerHTML = '<p>Datos cargados de sesión (localStorage). Usa ⚙ Settings para actualizar.</p>'; const d = localStorage.getItem('minutoresultado_updated'); if(d && document.getElementById('last-update')) document.getElementById('last-update').textContent = 'Última actualización: ' + new Date(d).toLocaleString('es-ES'); } } } catch(e) {}
 
 
 
@@ -191,10 +195,18 @@ window.loadSqlite = async (file) => {
                 document.getElementById("lista").innerHTML = "<p>Cargando SQLite...</p>";
                 const SQL = await initSqlJs({locateFile:()=>"https://cdnjs.cloudflare.com/ajax/libs/sql.js/1.8.0/sql-wasm.wasm"});
             const db = new SQL.Database(new Uint8Array(e.target.result));
+            const estadosRes = db.exec("SELECT * FROM EstadosActuacionT");
+            const estadosCols = estadosRes[0].columns; const estadosRows = estadosRes[0].values;
+            const idxId = estadosCols.indexOf('IdEstAct'); const idxNom = estadosCols.indexOf('Nombre del Estado');
+            const estados = {}; estadosRows.forEach(r => { const id = r[idxId] || r[0]; estados[id] = r[idxNom] || r[1] || ''; });
             const res = db.exec("SELECT * FROM ActuacionesT");
             const cols = res[0].columns; const rows = res[0].values;
-            actuaciones = rows.map(r => { let o={}; cols.forEach((c,i)=>o[c]=r[i]); return o; });
-            inicializarFiltros(actuaciones); render();
+            const macroestado = (est) => { if(est>=8) return 'finalizada'; if(est==7) return 'ejecucion'; if(est==6) return 'licitacion-obra'; if(est==5) return 'proyecto'; if(est==4) return 'redaccion'; if(est==3) return 'licitacion'; return 'pendiente'; };
+            const responsable = (m) => { if(m=='pendiente') return 'Órgano gestor'; if(m=='licitacion'||m=='redaccion') return 'Proyecto'; if(m=='proyecto') return 'DO'; if(m=='licitacion-obra') return 'Contratación'; if(m=='ejecucion') return 'Empresa'; if(m=='finalizada') return '—'; return '—'; };
+            const alerta = (m,c) => { if(m=='licitacion-obra' && c!=1) return '⚠️ DO pendiente (crítica)'; if(m=='proyecto' && c!=1) return '⚠️ Proyecto recibido sin DO adjudicada'; return ''; };
+            actuaciones = rows.map(r => { let o={}; cols.forEach((c,i)=>{ let k = c.trim(); if(k==='ORGANO GESTOR') k='OrganoGestor'; else if(k==='PROVINCIA') k='Provincia'; else if(k==='CENTRO SANITARIO') k='CentroSanitario'; else if(k==='IMPORTE TOTAL ') k='ImporteTotal'; else if(k==='EstadoActuacion') k='EstadoActuacion'; else if(k==='CodActuacion') k='CodActuacion'; else if(k==='MedidaUnificada') k='Medida'; else if(k==='CodSegFact') k='CodSegFact'; else if(k==='IDActuacion') k='CodActuacion'; else if(k==='oper') k='IDOperacion'; else if(k==='FE04') k='FE04'; else if(k==='Cubierta') k='Cubierta'; else if(k==='N') k='N'; else k=k; o[k]=r[i]; }); o.Macroestado = macroestado(o.EstadoActuacion||0); o.ResponsableActual = responsable(o.Macroestado); o.Alerta = alerta(o.Macroestado, o.Cubierta); o.ProgresoEstimado = Math.round((o.N||0)*10); return o; });
+            actuaciones.forEach(a => { a.EstadoTexto = estados[a.EstadoActuacion] || ''; });
+            inicializarFiltros(actuaciones); render(); localStorage.setItem('minutoresultado', JSON.stringify(actuaciones)); localStorage.setItem('minutoresultado_updated', new Date().toISOString()); document.getElementById('last-update').textContent = 'Última actualización: ' + new Date().toLocaleString('es-ES');
             } catch(err) {
                 document.getElementById('lista').innerHTML = '<p>Error SQLite: ' + err + '</p>';
             }
@@ -257,6 +269,11 @@ function render() {
         return true;
     });
 
+    if (filtradas.length === 0 && actuaciones.length > 0) {
+        lista.innerHTML = '<p>No hay resultados para los filtros actuales. <button onclick="document.getElementById(\'filtro-provincia\').value=\'\';document.getElementById(\'filtro-organo\').value=\'\';document.getElementById(\'filtro-macro\').value=\'\';document.getElementById(\'filtro-texto\').value=\'\';render();" style="padding:6px 12px;background:#003366;color:#fff;border:none;border-radius:4px;cursor:pointer;">Mostrar todo</button></p>';
+        actualizarKPIs(filtradas);
+        return;
+    }
     actualizarKPIs(filtradas);
 
     filtradas.forEach(a => {
