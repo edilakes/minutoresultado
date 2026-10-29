@@ -2,6 +2,7 @@
 <html lang="es">
 <head>
     <meta charset="UTF-8">
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/sql.js/1.8.0/sql-wasm.js"></script>
     <title>Minuto y Resultado – Actuaciones</title>
     <style>
         body {
@@ -120,6 +121,16 @@
 </head>
 <body>
 
+<div style="position:relative;display:inline-block;">
+  <button onclick="document.getElementById('settings-dropdown').style.display='block'" style="padding:8px 14px;background:#003366;color:#fff;border:none;border-radius:4px;cursor:pointer;">⚙ Settings</button>
+  <div id="settings-dropdown" style="display:none;position:absolute;top:100%;left:0;background:#fff;border:1px solid #ccc;border-radius:4px;padding:8px;box-shadow:0 2px 8px rgba(0,0,0,0.15);min-width:160px;z-index:10;">
+    <label style="font-size:13px;color:#003366;cursor:pointer;display:block;padding:4px 0;">
+      📂 Cargar SQLite
+      <input type="file" id="dbfile" accept=".sqlite" onchange="loadSqlite(this.files[0]); document.getElementById('settings-dropdown').style.display='none';" style="display:none;"/>
+    </label>
+  </div>
+</div>
+
 <header>Minuto y Resultado – Actuaciones</header>
 
 <div class="kpis">
@@ -169,18 +180,27 @@
 <script>
 let actuaciones = [];
 
-// 1. Cargar datos desde el servidor remoto
-fetch("http://localhost:5000/actuaciones_resumen")
-    .then(r => r.json())
-    .then(data => {
-        actuaciones = data;
-        inicializarFiltros(data);
-        render();
-    })
-    .catch(err => {
-        document.getElementById("lista").innerHTML =
-            "<p>Error cargando datos: " + err + "</p>";
-    });
+
+
+
+// 1. Cargar datos (FileReader)
+window.loadSqlite = async (file) => {
+        const reader = new FileReader();
+        reader.onload = async (e) => {
+            try {
+                document.getElementById("lista").innerHTML = "<p>Cargando SQLite...</p>";
+                const SQL = await initSqlJs({locateFile:()=>"https://cdnjs.cloudflare.com/ajax/libs/sql.js/1.8.0/sql-wasm.wasm"});
+            const db = new SQL.Database(new Uint8Array(e.target.result));
+            const res = db.exec("SELECT * FROM ActuacionesT");
+            const cols = res[0].columns; const rows = res[0].values;
+            actuaciones = rows.map(r => { let o={}; cols.forEach((c,i)=>o[c]=r[i]); return o; });
+            inicializarFiltros(actuaciones); render();
+            } catch(err) {
+                document.getElementById('lista').innerHTML = '<p>Error SQLite: ' + err + '</p>';
+            }
+        };
+        reader.readAsArrayBuffer(file);
+    };
 
 function inicializarFiltros(data) {
     const selProv = document.getElementById("filtro-provincia");
@@ -230,7 +250,7 @@ function render() {
                 a.OrganoGestor,
                 a.Medida,
                 a.FE04,
-                a.Operacion
+                a.IDOperacion
             ].join(" ").toLowerCase();
             if (!blob.includes(txt)) return false;
         }
@@ -259,7 +279,7 @@ function render() {
             </div>
             <div class="linea">
                 <strong>FE04:</strong> ${a.FE04 || ""} 
-                &nbsp;|&nbsp; <strong>Operación:</strong> ${a.Operacion || ""}
+                &nbsp;|&nbsp; <strong>Operación:</strong> ${a.IDOperacion || ""}
             </div>
             ${alerta ? `<div class="alerta">${alerta}</div>` : ""}
             <div class="responsable">Responsable actual: <strong>${a.ResponsableActual || "—"}</strong></div>
@@ -307,7 +327,7 @@ function abrirDetalle(a) {
     document.getElementById('d-progreso').textContent = (a.ProgresoEstimado !== undefined ? a.ProgresoEstimado : 0) + '%';
     document.getElementById('d-importe').textContent = a.ImporteTotal || '';
     document.getElementById('d-fe04').textContent = a.FE04 || '';
-    document.getElementById('d-op').textContent = a.Operacion || '';
+    document.getElementById('d-op').textContent = a.IDOperacion || '';
     document.getElementById('d-titulo').textContent = (a.CentroSanitario || '') + ' — id: ' + (a.CodSegFact || '');
     document.getElementById('detalle').style.display = 'block';
     window.scrollTo(0,0);

@@ -1,20 +1,6 @@
-import os, json
-from http.server import HTTPServer, BaseHTTPRequestHandler
-# Auto-instalar pyodbc en runtime si falta
-import sys, subprocess, importlib.util
-try:
-    import pyodbc
-except Exception:
-    subprocess.check_call([sys.executable, "-m", "pip", "install", "pyodbc"])
-    import pyodbc
+import os, json, sqlite3
+DB_BE = os.path.join(os.path.dirname(__file__), "database_be.sqlite")
 
-
-
-DB_BE = os.environ.get(
-    "MR_DB_BE",
-    r"\\nas.cifs.cti-sevilla.sas.junta-andalucia.es\SSCC-CONSTITUCION-1\SSCC"
-    r"\Sb-ServiciosGestionCentros\FondosEuropeos\Database_be.accdb"
-)
 def macroestado(est):
     if est >= 8: return "finalizada"
     if est == 7: return "ejecucion"
@@ -23,6 +9,7 @@ def macroestado(est):
     if est == 4: return "redaccion"
     if est == 3: return "licitacion"
     return "pendiente"
+
 def responsable(macro):
     if macro == "pendiente": return "Órgano gestor"
     if macro in ("licitacion", "redaccion"): return "Proyecto"
@@ -31,10 +18,13 @@ def responsable(macro):
     if macro == "ejecucion": return "Empresa"
     if macro == "finalizada": return "—"
     return "—"
+
 def alerta(macro, cubierta):
     if macro == "licitacion-obra" and not cubierta: return "⚠️ DO pendiente (crítica)"
     if macro == "proyecto" and not cubierta: return "⚠️ Proyecto recibido sin DO adjudicada"
     return ""
+
+from http.server import HTTPServer, BaseHTTPRequestHandler
 class Handler(BaseHTTPRequestHandler):
     def log_message(self, fmt, *args): pass
     def send_json(self, data, code=200):
@@ -46,8 +36,7 @@ class Handler(BaseHTTPRequestHandler):
     def do_GET(self):
         path = self.path.split("?")[0]
         if path == "/actuaciones_resumen":
-            conn = pyodbc.connect(f"Driver={{Microsoft Access Driver (*.mdb, *.accdb)}};DBQ={DB_BE};ReadOnly=1;", readonly=True, autocommit=True)
-            cur = conn.cursor()
+            conn = sqlite3.connect(DB_BE); conn.row_factory = sqlite3.Row; cur = conn.cursor()
             cur.execute("SELECT * FROM ActuacionesT")
             cols = [c[0] for c in cur.description]
             resumen = []
@@ -67,31 +56,23 @@ class Handler(BaseHTTPRequestHandler):
                     "ProgresoEstimado": round((a.get("N", 0) or 0) * 10),
                     "ImporteTotal": a.get("IMPORTE TOTAL "),
                     "FE04": a.get("FE04"),
-                    "Operacion": a.get("Operacion"),
+                    "IDOperacion": a.get("oper"),
                     "CodSegFact": a.get("CodSegFact"),
                 })
-            conn.close()
-            return self.send_json(resumen)
+            conn.close(); return self.send_json(resumen)
         elif path == "/db_tables":
-            conn = pyodbc.connect(f"Driver={{Microsoft Access Driver (*.mdb, *.accdb)}};DBQ={DB_BE};ReadOnly=1;", readonly=True, autocommit=True)
-            cur = conn.cursor()
-            cur.execute("SELECT Name FROM MSysObjects WHERE Type=1 AND Flags=0")
-            tablas = [r[0] for r in cur.fetchall()]
-            conn.close()
+            conn = sqlite3.connect(DB_BE); cur = conn.cursor()
+            cur.execute("SELECT name FROM sqlite_master WHERE type='table' AND name NOT LIKE 'sqlite_%'")
+            tablas = [r[0] for r in cur.fetchall()]; conn.close()
             return self.send_json({"tables": tablas})
         elif path.startswith("/db_schema/"):
-            table_name = path.split("/")[-1]
-            conn = pyodbc.connect(f"Driver={{Microsoft Access Driver (*.mdb, *.accdb)}};DBQ={DB_BE};ReadOnly=1;", readonly=True, autocommit=True)
-            cur = conn.cursor()
-            cur.execute(f"SELECT * FROM [{table_name}] WHERE 1=0")
-            columnas = [{"name": c[0], "type": str(c[1]), "nullable": c[6]} for c in cur.description]
-            conn.close()
-            return self.send_json({"table": table_name, "columns": columnas})
-        elif path.startswith("/db_data/"):
-            table_name = path.split("/")[-1]
-            return self.send_json({"table": table_name, "note":"paginación pendiente"})
+            t = path.split("/")[-1]; conn = sqlite3.connect(DB_BE); cur = conn.cursor()
+            cur.execute(f'SELECT * FROM "{t}" WHERE 1=0')
+            cols = [{"name": c[0], "type": str(c[1]), "nullable": c[6]} for c in cur.description]
+            conn.close(); return self.send_json({"table": t, "columns": cols})
         else:
             return self.send_json({"error":"Not found"}, 404)
+
 if __name__ == "__main__":
-    print("Servidor http://localhost:5000 (http.server, sin Flask)")
+    print("Servidor SQLite http://localhost:5000")
     HTTPServer(("0.0.0.0", 5000), Handler).serve_forever()
