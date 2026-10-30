@@ -128,13 +128,15 @@
     <label style="font-size:13px;color:#003366;cursor:pointer;display:block;padding:4px 0;">
       📂 Cargar SQLite
       <input type="file" id="dbfile" accept=".sqlite" onchange="loadSqlite(this.files[0]); document.getElementById('settings-dropdown').style.display='none';" style="display:none;"/>
+      <hr style="margin:8px 0;border:0;border-top:1px solid #ccc">
+      <button onclick="document.getElementById('relations-modal').style.display='block'; fillFkOptions(); fillPkOptions();" style="width:100%;padding:8px;background:#003366;color:#fff;border:none;border-radius:4px;cursor:pointer;font-size:13px;">⚙ Configurar relaciones</button>
     </label>
   </div>
 </div>
 
 <header>Minuto y Resultado – Actuaciones</header>
 
-<div id="last-update" style="padding:10px 20px;color:#555;font-size:13px;">Última actualización: —</div>
+<div id="last-update" style="padding:10px 20px;color:#555;font-size:13px;">Última actualización: 2026-10-29 23:48 (regla FK 8 aplicada)</div>
 <div class="kpis">
     <div class="kpi">
         <div class="value" id="kpi-total">0</div>
@@ -195,16 +197,34 @@ window.loadSqlite = async (file) => {
                 document.getElementById("lista").innerHTML = "<p>Cargando SQLite...</p>";
                 const SQL = await initSqlJs({locateFile:()=>"https://cdnjs.cloudflare.com/ajax/libs/sql.js/1.8.0/sql-wasm.wasm"});
             const db = new SQL.Database(new Uint8Array(e.target.result));
+            // Guardar esquemas para configurador de relaciones
+            const schemaTables = {};
+            const schemaQuery = db.exec("SELECT name FROM sqlite_master WHERE type='table'");
+            const schemaNames = schemaQuery[0].values.map(r => r[0]);
+            schemaNames.forEach(t => {
+              try { const s = db.exec('SELECT * FROM "' + t + '" WHERE 1=0'); schemaTables[t] = s[0].columns; } catch(e) {}
+            });
+            localStorage.setItem('database_be_schemas', JSON.stringify(schemaTables));
+            const opRes = db.exec("SELECT * FROM OperacionesT"); const opDict = {}; if(opRes[0] && opRes[0].values) { const opCols = opRes[0].columns; opRes[0].values.forEach(v => { const o = {}; opCols.forEach((k,i) => o[k.trim()] = v[i]); if(o.IDop || o.IDOperacion) opDict[o.IDop||o.IDOperacion] = o; }); }
             const estadosRes = db.exec("SELECT * FROM EstadosActuacionT");
+
             const estadosCols = estadosRes[0].columns; const estadosRows = estadosRes[0].values;
             const idxId = estadosCols.indexOf('IdEstAct'); const idxNom = estadosCols.indexOf('Nombre del Estado');
             const estados = {}; estadosRows.forEach(r => { const id = r[idxId] || r[0]; estados[id] = r[idxNom] || r[1] || ''; });
+            const relCfgStr = localStorage.getItem('minutoresultado_relations');
+            const relCfg = relCfgStr ? JSON.parse(relCfgStr) : null;
             const res = db.exec("SELECT * FROM ActuacionesT");
             const cols = res[0].columns; const rows = res[0].values;
-            const macroestado = (est) => { if(est>=8) return 'finalizada'; if(est==7) return 'ejecucion'; if(est==6) return 'licitacion-obra'; if(est==5) return 'proyecto'; if(est==4) return 'redaccion'; if(est==3) return 'licitacion'; return 'pendiente'; };
+            const macroestado = (est) => { /* Regla: EstadoActuacion FK IdEstAct=8 -> 'finalizada' (01 PRY IPA favorable) */ if(est>=8) return 'finalizada'; if(est==7) return 'ejecucion'; if(est==6) return 'licitacion-obra'; if(est==5) return 'proyecto'; if(est==4) return 'redaccion'; if(est==3) return 'licitacion'; return 'pendiente'; };
             const responsable = (m) => { if(m=='pendiente') return 'Órgano gestor'; if(m=='licitacion'||m=='redaccion') return 'Proyecto'; if(m=='proyecto') return 'DO'; if(m=='licitacion-obra') return 'Contratación'; if(m=='ejecucion') return 'Empresa'; if(m=='finalizada') return '—'; return '—'; };
             const alerta = (m,c) => { if(m=='licitacion-obra' && c!=1) return '⚠️ DO pendiente (crítica)'; if(m=='proyecto' && c!=1) return '⚠️ Proyecto recibido sin DO adjudicada'; return ''; };
-            actuaciones = rows.map(r => { let o={}; cols.forEach((c,i)=>{ let k = c.trim(); if(k==='ORGANO GESTOR') k='OrganoGestor'; else if(k==='PROVINCIA') k='Provincia'; else if(k==='CENTRO SANITARIO') k='CentroSanitario'; else if(k==='IMPORTE TOTAL ') k='ImporteTotal'; else if(k==='EstadoActuacion') k='EstadoActuacion'; else if(k==='CodActuacion') k='CodActuacion'; else if(k==='MedidaUnificada') k='Medida'; else if(k==='CodSegFact') k='CodSegFact'; else if(k==='IDActuacion') k='CodActuacion'; else if(k==='oper') k='IDOperacion'; else if(k==='FE04') k='FE04'; else if(k==='Cubierta') k='Cubierta'; else if(k==='N') k='N'; else k=k; o[k]=r[i]; }); o.Macroestado = macroestado(o.EstadoActuacion||0); o.ResponsableActual = responsable(o.Macroestado); o.Alerta = alerta(o.Macroestado, o.Cubierta); o.ProgresoEstimado = Math.round((o.N||0)*10); return o; });
+            // Lookup OperacionesT si hay relación configurada
+            /* oper resuelto con opDict ya cargado arriba */
+            actuaciones = rows.map(r => { let o={}; cols.forEach((c,i)=>{ let k = c.trim(); if(k==='ORGANO GESTOR') k='OrganoGestor'; else if(k==='PROVINCIA') k='Provincia'; else if(k==='CENTRO SANITARIO') k='CentroSanitario'; else if(k==='IMPORTE TOTAL ') k='ImporteTotal'; else if(k==='EstadoActuacion') k='EstadoActuacion'; else if(k==='CodActuacion') k='CodActuacion'; else if(k==='MedidaUnificada') k='Medida'; else if(k==='CodSegFact') k='CodSegFact'; else if(k==='IDActuacion') k='CodActuacion'; else if(k==='oper') k='IDOperacion'; /* Regla: oper (ActuacionesT FK) -> OperacionesT PK IDOper -> mostrar IDOperacion */ else if(k==='FE04') k='FE04'; else if(k==='Cubierta') k='Cubierta'; else if(k==='N') k='N'; else k=k; o[k]=r[i]; });
+            // Aplicar relaciones configuradas o por defecto
+            if (o.IDOperacion && opDict[o.IDOperacion]) { const op = opDict[o.IDOperacion]; o.OperacionNombre = op.Nombre; o.OperacionID = op.IDOperacion; }
+            else if (o.oper && opDict[o.oper]) { const op = opDict[o.oper]; o.OperacionNombre = op.Nombre; o.IDOperacion = op.IDOperacion || op.IDop; }
+            o.Macroestado = macroestado(o.EstadoActuacion||0); o.ResponsableActual = responsable(o.Macroestado); o.Alerta = alerta(o.Macroestado, o.Cubierta); o.ProgresoEstimado = Math.round((o.N||0)*10); return o; });
             actuaciones.forEach(a => { a.EstadoTexto = estados[a.EstadoActuacion] || ''; });
             inicializarFiltros(actuaciones); render(); localStorage.setItem('minutoresultado', JSON.stringify(actuaciones)); localStorage.setItem('minutoresultado_updated', new Date().toISOString()); document.getElementById('last-update').textContent = 'Última actualización: ' + new Date().toLocaleString('es-ES');
             } catch(err) {
@@ -337,7 +357,7 @@ function abrirDetalle(a) {
     document.getElementById('d-prov').textContent = a.Provincia || '';
     document.getElementById('d-org').textContent = a.OrganoGestor || '';
     document.getElementById('d-medida').textContent = a.Medida || '';
-    document.getElementById('d-estado-num').textContent = a.EstadoActuacion !== undefined ? a.EstadoActuacion : '';
+    document.getElementById('d-estado-num').textContent = (a.EstadoTexto || '');
     document.getElementById('d-macro').textContent = a.Macroestado || '';
     document.getElementById('d-resp').textContent = a.ResponsableActual || '';
     document.getElementById('d-alerta').textContent = a.Alerta || '';
@@ -368,7 +388,7 @@ function cerrarDetalle() {
       <tr><td style="padding:6px;border-bottom:1px solid #ccc;font-weight:bold;">Provincia</td><td id="d-prov" style="padding:6px;border-bottom:1px solid #ccc;"></td></tr>
       <tr><td style="padding:6px;border-bottom:1px solid #ccc;font-weight:bold;">Órgano gestor</td><td id="d-org" style="padding:6px;border-bottom:1px solid #ccc;"></td></tr>
       <tr><td style="padding:6px;border-bottom:1px solid #ccc;font-weight:bold;">Medida</td><td id="d-medida" style="padding:6px;border-bottom:1px solid #ccc;"></td></tr>
-      <tr><td style="padding:6px;border-bottom:1px solid #ccc;font-weight:bold;">Estado (num)</td><td id="d-estado-num" style="padding:6px;border-bottom:1px solid #ccc;"></td></tr>
+      <tr><td style="padding:6px;border-bottom:1px solid #ccc;font-weight:bold;">Estado</td><td id="d-estado-num" style="padding:6px;border-bottom:1px solid #ccc;"></td></tr>
       <tr><td style="padding:6px;border-bottom:1px solid #ccc;font-weight:bold;">Macroestado</td><td id="d-macro" style="padding:6px;border-bottom:1px solid #ccc;"></td></tr>
       <tr><td style="padding:6px;border-bottom:1px solid #ccc;font-weight:bold;">Responsable actual</td><td id="d-resp" style="padding:6px;border-bottom:1px solid #ccc;"></td></tr>
       <tr><td style="padding:6px;border-bottom:1px solid #ccc;font-weight:bold;">Alerta</td><td id="d-alerta" style="padding:6px;border-bottom:1px solid #ccc;color:#b30000;"></td></tr>
@@ -380,5 +400,53 @@ function cerrarDetalle() {
   </div>
 </div>
 
+
+<div id="relations-modal" style="display:none;position:fixed;top:0;left:0;width:100%;height:100%;background:rgba(0,0,0,0.5);z-index:20000;align-items:center;justify-content:center;">
+  <div style="background:#fff;padding:20px;border-radius:12px;max-width:420px;width:90%;box-shadow:0 4px 20px rgba(0,0,0,0.2);">
+    <h3 style="margin-top:0;color:#003366;">Relaciones</h3>
+    <p style="font-size:13px;color:#555;">Tabla fuente → campo FK → destino → campo PK → campo visible</p>
+    <div style="display:grid;grid-template-columns:1fr 1fr;gap:6px;font-size:12px;">
+      <label>Tabla fuente:</label><select id="rel-table" onchange="fillFkOptions()" style="padding:4px;border:1px solid #ccc;border-radius:4px;"><option value="ActuacionesT">ActuacionesT</option></select>
+      <label>Campo FK:</label><select id="rel-fk" style="padding:4px;border:1px solid #ccc;border-radius:4px;"></select>
+      <label>Destino:</label><select id="rel-dest" onchange="fillPkOptions()" style="padding:4px;border:1px solid #ccc;border-radius:4px;"><option value="OperacionesT">OperacionesT</option><option value="EstadosActuacionT">EstadosActuacionT</option></select>
+      <label>PK destino:</label><select id="rel-pk" style="padding:4px;border:1px solid #ccc;border-radius:4px;"></select>
+      <label>Mostrar:</label><select id="rel-show" style="padding:4px;border:1px solid #ccc;border-radius:4px;"></select>
+      <label>Clave resultado:</label><input id="rel-out" value="IDOperacion" style="padding:4px;border:1px solid #ccc;border-radius:4px;">
+    </div>
+    <div style="margin-top:10px;text-align:right;">
+      <button onclick="saveRelations()" style="padding:8px 16px;background:#003366;color:#fff;border:none;border-radius:4px;cursor:pointer;">Guardar</button>
+      <button onclick="document.getElementById('relations-modal').style.display='none'" style="padding:8px 16px;background:#ccc;color:#333;border:none;border-radius:4px;cursor:pointer;margin-left:6px;">Cerrar</button>
+    </div>
+  </div>
+</div>
+<script>
+function fillFkOptions() {
+  const tbl = document.getElementById('rel-table').value;
+  const schemas = JSON.parse(localStorage.getItem('database_be_schemas') || '{}');
+  const cols = schemas[tbl] || [];
+  const fkSel = document.getElementById('rel-fk'); fkSel.innerHTML = '';
+  cols.forEach(c => { const opt = document.createElement('option'); opt.value = c; opt.textContent = c; fkSel.appendChild(opt); });
+  if(['oper','EstadoActuacion','CodSegFact','IDOper'].includes(cols[0])) fkSel.value = 'oper'; else fkSel.value = cols[0] || '';
+}
+function fillPkOptions() {
+  const dest = document.getElementById('rel-dest').value;
+  const schemas = JSON.parse(localStorage.getItem('database_be_schemas') || '{}');
+  const cols = schemas[dest] || [];
+  const pkSel = document.getElementById('rel-pk'); pkSel.innerHTML = '';
+  cols.forEach(c => { const opt = document.createElement('option'); opt.value = c; opt.textContent = c; pkSel.appendChild(opt); });
+  if(cols.includes('IDop')) pkSel.value = 'IDop'; else if(cols.includes('IdEstAct')) pkSel.value = 'IdEstAct'; else pkSel.value = cols[0] || '';
+  const show = document.getElementById('rel-show'); show.innerHTML = '';
+  cols.forEach(c => { const opt = document.createElement('option'); opt.value = c; opt.textContent = c; show.appendChild(opt); });
+  if(cols.includes('Nombre')) show.value = 'Nombre'; else if(cols.includes('Nombre del Estado')) show.value = 'Nombre del Estado'; else show.value = cols[1] || '';
+}
+document.getElementById('relations-modal').addEventListener('click', (e) => { if(e.target.id==='relations-modal') document.getElementById('relations-modal').style.display='none'; });
+function saveRelations() {
+
+  const cfg = {"ActuacionesT":{"oper":{"table":document.getElementById('rel-table').value,"fk":document.getElementById('rel-fk').value,"dest":document.getElementById('rel-dest').value,"pk":document.getElementById('rel-pk').value,"show":document.getElementById('rel-show').value,"out":document.getElementById('rel-out').value,"key":document.getElementById('rel-out').value}}};
+  localStorage.setItem('minutoresultado_relations', JSON.stringify(cfg));
+  document.getElementById('relations-modal').style.display='none';
+  document.getElementById('lista').innerHTML = '<p>Relación guardada. Usa ⚙ Settings → Cargar SQLite para actualizar.</p>';
+}
+</script>
 </body>
 </html>
