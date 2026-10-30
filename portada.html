@@ -213,7 +213,7 @@ window.loadSqlite = async (file) => {
             const estados = {}; estadosRows.forEach(r => { const id = r[idxId] || r[0]; estados[id] = r[idxNom] || r[1] || ''; });
             const relCfgStr = localStorage.getItem('minutoresultado_relations');
             const relCfg = relCfgStr ? JSON.parse(relCfgStr) : null;
-            const res = db.exec("SELECT * FROM ActuacionesT");
+            const res = db.exec("SELECT a.*, b.Nombre as OperacionNombre, b.IDOperacion as OperacionID, b.IDop as OperIDop FROM ActuacionesT a LEFT JOIN OperacionesT b ON (a.oper = b.IDop OR a.oper = b.IDOperacion)");
             const cols = res[0].columns; const rows = res[0].values;
             const macroestado = (est) => { /* Regla: EstadoActuacion FK IdEstAct=8 -> 'finalizada' (01 PRY IPA favorable) */ if(est>=8) return 'finalizada'; if(est==7) return 'ejecucion'; if(est==6) return 'licitacion-obra'; if(est==5) return 'proyecto'; if(est==4) return 'redaccion'; if(est==3) return 'licitacion'; return 'pendiente'; };
             const responsable = (m) => { if(m=='pendiente') return 'Órgano gestor'; if(m=='licitacion'||m=='redaccion') return 'Proyecto'; if(m=='proyecto') return 'DO'; if(m=='licitacion-obra') return 'Contratación'; if(m=='ejecucion') return 'Empresa'; if(m=='finalizada') return '—'; return '—'; };
@@ -222,8 +222,11 @@ window.loadSqlite = async (file) => {
             /* oper resuelto con opDict ya cargado arriba */
             actuaciones = rows.map(r => { let o={}; cols.forEach((c,i)=>{ let k = c.trim(); if(k==='ORGANO GESTOR') k='OrganoGestor'; else if(k==='PROVINCIA') k='Provincia'; else if(k==='CENTRO SANITARIO') k='CentroSanitario'; else if(k==='IMPORTE TOTAL ') k='ImporteTotal'; else if(k==='EstadoActuacion') k='EstadoActuacion'; else if(k==='CodActuacion') k='CodActuacion'; else if(k==='MedidaUnificada') k='Medida'; else if(k==='CodSegFact') k='CodSegFact'; else if(k==='IDActuacion') k='CodActuacion'; else if(k==='oper') k='IDOperacion'; /* Regla: oper (ActuacionesT FK) -> OperacionesT PK IDOper -> mostrar IDOperacion */ else if(k==='FE04') k='FE04'; else if(k==='Cubierta') k='Cubierta'; else if(k==='N') k='N'; else k=k; o[k]=r[i]; });
             // Aplicar relaciones configuradas o por defecto
-            if (o.IDOperacion && opDict[o.IDOperacion]) { const op = opDict[o.IDOperacion]; o.OperacionNombre = op.Nombre; o.OperacionID = op.IDOperacion; }
-            else if (o.oper && opDict[o.oper]) { const op = opDict[o.oper]; o.OperacionNombre = op.Nombre; o.IDOperacion = op.IDOperacion || op.IDop; }
+                        // Los campos OperacionNombre y OperacionID ya vienen por LEFT JOIN ActuacionesT/OperacionesT
+                        if (!o.OperacionNombre && o.OperacionID && opDict[o.OperacionID]) { const op = opDict[o.OperacionID]; o.OperacionNombre = op.Nombre; }
+                        if (!o.OperacionID && o.IDOperacion && opDict[o.IDOperacion]) { const op = opDict[o.IDOperacion]; o.OperacionID = op.IDOperacion || op.IDop; }
+                        if (!o.OperacionID && o.oper && opDict[o.oper]) { const op = opDict[o.oper]; o.OperacionID = op.IDOperacion || op.IDop; }
+                        if (!o.OperacionNombre && o.oper && opDict[o.oper]) { const op = opDict[o.oper]; o.OperacionNombre = op.Nombre; }
             o.Macroestado = macroestado(o.EstadoActuacion||0); o.ResponsableActual = responsable(o.Macroestado); o.Alerta = alerta(o.Macroestado, o.Cubierta); o.ProgresoEstimado = Math.round((o.N||0)*10); return o; });
             actuaciones.forEach(a => { a.EstadoTexto = estados[a.EstadoActuacion] || ''; });
             inicializarFiltros(actuaciones); render(); localStorage.setItem('minutoresultado', JSON.stringify(actuaciones)); localStorage.setItem('minutoresultado_updated', new Date().toISOString()); document.getElementById('last-update').textContent = 'Última actualización: ' + new Date().toLocaleString('es-ES');
@@ -282,7 +285,7 @@ function render() {
                 a.OrganoGestor,
                 a.Medida,
                 a.FE04,
-                a.IDOperacion
+                a.IDOperacion, a.OperacionID, a.OperacionNombre
             ].join(" ").toLowerCase();
             if (!blob.includes(txt)) return false;
         }
@@ -315,9 +318,9 @@ function render() {
                 &nbsp;|&nbsp; <strong>Órgano gestor:</strong> ${a.OrganoGestor || ""}
             </div>
             <div class="linea">
-                <strong>FE04:</strong> ${a.FE04 || ""} 
-                &nbsp;|&nbsp; <strong>Operación:</strong> ${a.IDOperacion || ""}
-            </div>
+                            <strong>FE04:</strong> ${a.FE04 || ""} 
+                            &nbsp;|&nbsp; <strong>Operación:</strong> ${a.OperacionID || ""} - ${a.OperacionNombre || ""}
+                        </div>
             ${alerta ? `<div class="alerta">${alerta}</div>` : ""}
             <div class="responsable">Responsable actual: <strong>${a.ResponsableActual || "—"}</strong></div>
             <div class="progreso">Progreso estimado: ${a.ProgresoEstimado ?? 0}%</div>
@@ -364,7 +367,7 @@ function abrirDetalle(a) {
     document.getElementById('d-progreso').textContent = (a.ProgresoEstimado !== undefined ? a.ProgresoEstimado : 0) + '%';
     document.getElementById('d-importe').textContent = a.ImporteTotal || '';
     document.getElementById('d-fe04').textContent = a.FE04 || '';
-    document.getElementById('d-op').textContent = a.IDOperacion || '';
+    document.getElementById('d-op').textContent = a.OperacionID || '' + ' - ' + (a.OperacionNombre || '')
     document.getElementById('d-titulo').textContent = (a.CentroSanitario || '') + ' — id: ' + (a.CodSegFact || '');
     document.getElementById('detalle').style.display = 'block';
     window.scrollTo(0,0);
