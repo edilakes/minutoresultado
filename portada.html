@@ -183,8 +183,9 @@
 
 <script>
 let actuaciones = [];
+function escapeHtml(t){if(t==null||t===undefined)return '';const d=document.createElement('div');d.textContent=t;return d.innerHTML;}
 // Recuperar de localStorage si existe
-try { const saved = localStorage.getItem('minutoresultado'); if(saved) { const parsed = JSON.parse(saved); if(Array.isArray(parsed) && parsed.length>0) { actuaciones = parsed; if(document.getElementById('lista')) { inicializarFiltros(actuaciones); render(); } else { setTimeout(()=>{ inicializarFiltros(actuaciones); render(); }, 100); } document.getElementById('lista').innerHTML = '<p>Datos cargados de sesión (localStorage). Usa ⚙ Settings para actualizar.</p>'; const d = localStorage.getItem('minutoresultado_updated'); if(d && document.getElementById('last-update')) document.getElementById('last-update').textContent = 'Última actualización: ' + new Date(d).toLocaleString('es-ES'); } } } catch(e) {}
+try { const saved = localStorage.getItem('minutoresultado'); if(saved) { const parsed = JSON.parse(saved); if(Array.isArray(parsed) && parsed.length>0) { actuaciones = parsed; if(document.getElementById('lista')) { inicializarFiltros(actuaciones); render(); } else { setTimeout(()=>{ inicializarFiltros(actuaciones); render(); }, 100); } document.getElementById('lista').innerHTML = '<p>Datos cargados de sesión (localStorage). Usa ⚙ Settings → Cargar SQLite con <b>database_be.sqlite</b> (DB SAS/FEDER) para actualizar. <button onclick="document.getElementById("dbfile").click()" style="padding:6px 12px;background:#003366;color:#fff;border:none;border-radius:4px;cursor:pointer;">📂 Cargar DB SAS/FEDER</button></p>'; const d = localStorage.getItem('minutoresultado_updated'); if(d && document.getElementById('last-update')) document.getElementById('last-update').textContent = 'Última actualización: ' + new Date(d).toLocaleString('es-ES'); } } } catch(e) {}
 
 
 
@@ -196,7 +197,7 @@ window.loadSqlite = async (file) => {
             try {
                 document.getElementById("lista").innerHTML = "<p>Cargando SQLite...</p>";
                 const SQL = await initSqlJs({locateFile:()=>"https://cdnjs.cloudflare.com/ajax/libs/sql.js/1.8.0/sql-wasm.wasm"});
-            const db = new SQL.Database(new Uint8Array(e.target.result));
+            const db = new SQL.Database(new Uint8Array(e.target.result)); window.db = db;
             // Guardar esquemas para configurador de relaciones
             const schemaTables = {};
             const schemaQuery = db.exec("SELECT name FROM sqlite_master WHERE type='table'");
@@ -215,19 +216,19 @@ window.loadSqlite = async (file) => {
             const relCfg = relCfgStr ? JSON.parse(relCfgStr) : null;
             const res = db.exec("SELECT a.*, b.Nombre as OperacionNombre, b.IDOperacion as OperacionID, b.IDop as OperIDop FROM ActuacionesT a LEFT JOIN OperacionesT b ON (a.oper = b.IDop OR a.oper = b.IDOperacion)");
             const cols = res[0].columns; const rows = res[0].values;
-            const macroestado = (est) => { /* Regla: EstadoActuacion FK IdEstAct=8 -> 'finalizada' (01 PRY IPA favorable) */ if(est>=8) return 'finalizada'; if(est==7) return 'ejecucion'; if(est==6) return 'licitacion-obra'; if(est==5) return 'proyecto'; if(est==4) return 'redaccion'; if(est==3) return 'licitacion'; return 'pendiente'; };
+            const macroestado = (est) => { const s = (est === null || est === undefined) ? 0 : Number(est); if(s>=8) return 'finalizada'; if(s==7) return 'ejecucion'; if(s==6) return 'licitacion-obra'; if(s==5) return 'proyecto'; if(s==4) return 'redaccion'; if(s==3) return 'licitacion'; return 'pendiente'; };
             const responsable = (m) => { if(m=='pendiente') return 'Órgano gestor'; if(m=='licitacion'||m=='redaccion') return 'Proyecto'; if(m=='proyecto') return 'DO'; if(m=='licitacion-obra') return 'Contratación'; if(m=='ejecucion') return 'Empresa'; if(m=='finalizada') return '—'; return '—'; };
             const alerta = (m,c) => { if(m=='licitacion-obra' && c!=1) return '⚠️ DO pendiente (crítica)'; if(m=='proyecto' && c!=1) return '⚠️ Proyecto recibido sin DO adjudicada'; return ''; };
             // Lookup OperacionesT si hay relación configurada
             /* oper resuelto con opDict ya cargado arriba */
-            actuaciones = rows.map(r => { let o={}; cols.forEach((c,i)=>{ let k = c.trim(); if(k==='ORGANO GESTOR') k='OrganoGestor'; else if(k==='PROVINCIA') k='Provincia'; else if(k==='CENTRO SANITARIO') k='CentroSanitario'; else if(k==='IMPORTE TOTAL ') k='ImporteTotal'; else if(k==='EstadoActuacion') k='EstadoActuacion'; else if(k==='CodActuacion') k='CodActuacion'; else if(k==='MedidaUnificada') k='Medida'; else if(k==='CodSegFact') k='CodSegFact'; else if(k==='IDActuacion') k='CodActuacion'; else if(k==='oper') k='IDOperacion'; /* Regla: oper (ActuacionesT FK) -> OperacionesT PK IDOper -> mostrar IDOperacion */ else if(k==='FE04') k='FE04'; else if(k==='Cubierta') k='Cubierta'; else if(k==='N') k='N'; else k=k; o[k]=r[i]; });
+            actuaciones = rows.map(r => { let o={}; cols.forEach((c,i)=>{ let k = c.trim(); if(k==='ORGANO GESTOR') k='OrganoGestor'; else if(k==='PROVINCIA') k='Provincia'; else if(k==='CENTRO SANITARIO') k='CentroSanitario'; else if(k==='IMPORTE TOTAL ' || k==='IMPORTE TOTAL') k='ImporteTotal'; else if(k==='ImportePro' || k==='IMPORTE PRO') k='ImportePro'; else if(k==='EstadoActuacion') k='EstadoActuacion'; else if(k==='CodActuacion') k='CodActuacion'; else if(k==='MedidaUnificada') k='Medida'; else if(k==='CodSegFact') k='CodSegFact'; else if(k==='IDActuacion') k='CodActuacion'; else if(k==='oper') k='IDOperacion'; /* Regla: oper (ActuacionesT FK) -> OperacionesT PK IDOper -> mostrar IDOperacion */ else if(k==='FE04') k='FE04'; else if(k==='Cubierta') k='Cubierta'; else if(k==='N') k='N'; else k=k; o[k]=r[i]; });
             // Aplicar relaciones configuradas o por defecto
                         // Los campos OperacionNombre y OperacionID ya vienen por LEFT JOIN ActuacionesT/OperacionesT
                         if (!o.OperacionNombre && o.OperacionID && opDict[o.OperacionID]) { const op = opDict[o.OperacionID]; o.OperacionNombre = op.Nombre; }
                         if (!o.OperacionID && o.IDOperacion && opDict[o.IDOperacion]) { const op = opDict[o.IDOperacion]; o.OperacionID = op.IDOperacion || op.IDop; }
                         if (!o.OperacionID && o.oper && opDict[o.oper]) { const op = opDict[o.oper]; o.OperacionID = op.IDOperacion || op.IDop; }
                         if (!o.OperacionNombre && o.oper && opDict[o.oper]) { const op = opDict[o.oper]; o.OperacionNombre = op.Nombre; }
-            o.Macroestado = macroestado(o.EstadoActuacion||0); o.ResponsableActual = responsable(o.Macroestado); o.Alerta = alerta(o.Macroestado, o.Cubierta); o.ProgresoEstimado = Math.round((o.N||0)*10); return o; });
+            o.Macroestado = estados[o.EstadoActuacion] || ''; o.ResponsableActual = responsable(o.Macroestado); o.Alerta = alerta(o.Macroestado, o.Cubierta); o.ProgresoEstimado = Math.round((o.N||0)*10); return o; });
             actuaciones.forEach(a => { a.EstadoTexto = estados[a.EstadoActuacion] || ''; });
             inicializarFiltros(actuaciones); render(); localStorage.setItem('minutoresultado', JSON.stringify(actuaciones)); localStorage.setItem('minutoresultado_updated', new Date().toISOString()); document.getElementById('last-update').textContent = 'Última actualización: ' + new Date().toLocaleString('es-ES');
             } catch(err) {
@@ -311,20 +312,20 @@ function render() {
 
         card.innerHTML = `
             <div class="estado">${macroLabel}</div>
-            <div class="titulo">${a.CentroSanitario || "(Centro sin nombre)"} – ${a.Medida || ""}</div>
+            <div class="titulo">${escapeHtml(a.CentroSanitario || "(Centro sin nombre)")} – ${escapeHtml(a.Medida || "")}</div>
             <div class="linea">
-                <strong>id:</strong> ${a.CodSegFact || ""} 
-                &nbsp;|&nbsp; <strong>Provincia:</strong> ${a.Provincia || ""}
-                &nbsp;|&nbsp; <strong>Órgano gestor:</strong> ${a.OrganoGestor || ""}
+                <strong>id:</strong> ${escapeHtml(a.CodSegFact || "")} 
+                &nbsp;|&nbsp; <strong>Provincia:</strong> ${escapeHtml(a.Provincia || "")}
+                &nbsp;|&nbsp; <strong>Órgano gestor:</strong> ${escapeHtml(a.OrganoGestor || "")}
             </div>
             <div class="linea">
-                            <strong>FE04:</strong> ${a.FE04 || ""} 
-                            &nbsp;|&nbsp; <strong>Operación:</strong> ${a.OperacionID || ""} - ${a.OperacionNombre || ""}
+                            <strong>FE04:</strong> ${escapeHtml(a.FE04 || "")} 
+                            &nbsp;|&nbsp; <strong>Operación:</strong> ${escapeHtml(a.OperacionID || "")} - ${escapeHtml(a.OperacionNombre || "")}
                         </div>
-            ${alerta ? `<div class="alerta">${alerta}</div>` : ""}
-            <div class="responsable">Responsable actual: <strong>${a.ResponsableActual || "—"}</strong></div>
-            <div class="progreso">Progreso estimado: ${a.ProgresoEstimado ?? 0}%</div>
-            <div class="meta">id: ${a.CodSegFact || ""}</div>
+            ${alerta ? `<div class="alerta">${escapeHtml(alerta)}</div>` : ""}
+            <div class="responsable">Responsable actual: <strong>${escapeHtml(a.ResponsableActual || "—")}</strong></div>
+            <div class="progreso">Progreso estimado: ${escapeHtml(String((a.ProgresoEstimado ?? 0))) + '%'}</div>
+            <div class="meta">id: ${escapeHtml(a.CodSegFact || "")}</div>
         `;
 
         lista.appendChild(card);
@@ -366,8 +367,56 @@ function abrirDetalle(a) {
     document.getElementById('d-alerta').textContent = a.Alerta || '';
     document.getElementById('d-progreso').textContent = (a.ProgresoEstimado !== undefined ? a.ProgresoEstimado : 0) + '%';
     document.getElementById('d-importe').textContent = a.ImporteTotal || '';
+    // T5: datos de medida / RSO / crédito (lookup manual de 3 medidas conocidas; DB dinámica si disponible)
+    const medidaCodigo = a.Medida || '';
+    const mapaMed = {'A421AA44SA':{nombre:'Renov. eficiencia energética (RSO2.1)',rso:'RSO2.1',cred:'52.118.857,58 €'},'A421AA45SA':{nombre:'Renov. eficiencia energética c/ criterios (RSO2.1)',rso:'RSO2.1',cred:'88.927.805,23 €'},'A421BA48SA':{nombre:'Energía renovable solar (RSO2.2)',rso:'RSO2.2',cred:'115.953.333,18 €'}};
+    let infoMedida = `<strong>` + escapeHtml(medidaCodigo) + `</strong>`;
+    if (mapaMed[medidaCodigo]) { const m = mapaMed[medidaCodigo]; infoMedida = `<strong>` + escapeHtml(medidaCodigo) + `</strong> — ` + escapeHtml(m.rso) + ' — Crédito: ' + escapeHtml(m.cred); }
+    document.getElementById('d-medida-info').innerHTML = infoMedida;
     document.getElementById('d-fe04').textContent = a.FE04 || '';
     document.getElementById('d-op').textContent = a.OperacionID || '' + ' - ' + (a.OperacionNombre || '')
+    // Propagación jerárquica de BitacoraT (consulta dinámica con sql.js / window.db)
+    try {
+        if (window.db) {
+            const codAct = (o.CodActuacion || o.IDActuacion || '').toString();
+            const codExp = (o.Expediente || '').toString();
+            const codMed = (a.Medida || '').toString();
+            const fe04 = (o.FE04 || '').toString();
+            const qBit = "SELECT IdBitacora, Fecha, Expediente, Actuacion, Medida, FE04, Descripción FROM BitacoraT WHERE (Actuacion = ? OR Actuacion = ?) OR (Expediente = ? OR Expediente = ?) OR (Medida = ? OR Medida = ?) OR (FE04 = ? OR FE04 = ?) ORDER BY Fecha DESC LIMIT 25";
+            const resBit = window.db.exec(qBit, [codAct, codAct, codExp, codExp, codMed, codMed, fe04, fe04]);
+            const bitCont = document.getElementById('d-bitacora');
+            if (bitCont) {
+                if (resBit && resBit[0] && resBit[0].values && resBit[0].values.length > 0) {
+                    const cols = resBit[0].columns;
+                    const items = resBit[0].values.map(v => {
+                        const it = {};
+                        cols.forEach((c, i) => it[c.trim()] = v[i]);
+                        return it;
+                    });
+                    const html = items.map(it => '<div style="padding:4px 0;border-bottom:1px dashed #ccc;font-size:12px;">' +
+                        '<strong>' + escapeHtml(String(it.Fecha || '')) + '</strong> | ' +
+                        'Exp=' + escapeHtml(String(it.Expediente || '')) + ' | ' +
+                        'Act=' + escapeHtml(String(it.Actuacion || '')) + ' | ' +
+                        'Med=' + escapeHtml(String(it.Medida || '')) + ' | ' +
+                        'FE04=' + escapeHtml(String(it.FE04 || '')) + ' — ' +
+                        escapeHtml(String((it.Descripción || it.Descripcion || '').toString()).substring(0, 140)) +
+                        '</div>').join('');
+                    bitCont.innerHTML = '<div style="max-height:240px;overflow:auto;padding:4px;background:#fafafa;border:1px solid #ddd;border-radius:6px;">' + html + '</div>' +
+                        '<div style="font-size:11px;color:#666;margin-top:4px;">Propagación jerárquica total: ' + items.length + ' entradas.</div>';
+                } else {
+                    bitCont.innerHTML = '<em>Sin entradas de bitácora para esta actuación / expediente / medida (propagación jerárquica pendiente).</em>';
+                }
+            }
+        } else {
+            const bitCont = document.getElementById('d-bitacora');
+            if (bitCont) bitCont.innerHTML = '<em>DB no cargada (cargar SQLite para ver trazabilidad).</em>';
+        }
+    } catch(e) {
+        console.log('Propagación jerárquica error:', e);
+        const bitCont = document.getElementById('d-bitacora');
+        if (bitCont) bitCont.innerHTML = '<em>Error al consultar trazabilidad.</em>';
+    }
+
     document.getElementById('d-titulo').textContent = (a.CentroSanitario || '') + ' — id: ' + (a.CodSegFact || '');
     document.getElementById('detalle').style.display = 'block';
     window.scrollTo(0,0);
@@ -399,6 +448,9 @@ function cerrarDetalle() {
       <tr><td style="padding:6px;border-bottom:1px solid #ccc;font-weight:bold;">Importe total</td><td id="d-importe" style="padding:6px;border-bottom:1px solid #ccc;"></td></tr>
       <tr><td style="padding:6px;border-bottom:1px solid #ccc;font-weight:bold;">FE04</td><td id="d-fe04" style="padding:6px;border-bottom:1px solid #ccc;"></td></tr>
       <tr><td style="padding:6px;border-bottom:1px solid #ccc;font-weight:bold;">Operación</td><td id="d-op" style="padding:6px;border-bottom:1px solid #ccc;"></td></tr>
+      <tr><td style="padding:6px;border-bottom:1px solid #ccc;font-weight:bold;">Trazabilidad (Bitácora)</td><td id="d-bitacora" style="padding:6px;border-bottom:1px solid #ccc;font-size:12px;color:#555;">Bitácora: `BitacoraT` (721 filas). Referencias: `Expediente` (307), `Actuacion` (166), `Medida` (47), `FE04` (56). Propagación jerárquica pendiente.</td></tr>
+      <tr><td style="padding:6px;border-bottom:1px solid #ccc;font-weight:bold;">Medida (RSO) / Crédito</td><td id="d-medida-info" style="padding:6px;border-bottom:1px solid #ccc;font-size:12px;color:#333;"></td></tr>
+      <tr><td style="padding:6px;border-bottom:1px solid #ccc;font-weight:bold;">Indicadores (KPI)</td><td id="d-indicadores" style="padding:6px;border-bottom:1px solid #ccc;font-size:12px;color:#555;">Indicadores `RCO` (realización) / `RCR` (resultado) vinculados a medida. Datos confirmados en DB (`RelMedidaIndicadorT`). Ej. `RCO19`: 31.391,88 m² (base) / 900.390,37 m² (objetivo29).</td></tr>
     </table>
   </div>
 </div>

@@ -2,12 +2,13 @@ import os, json, sqlite3
 DB_BE = os.path.join(os.path.dirname(__file__), "database_be.sqlite")
 
 def macroestado(est):
-    if est >= 8: return "finalizada"
-    if est == 7: return "ejecucion"
-    if est == 6: return "licitacion-obra"
-    if est == 5: return "proyecto"
-    if est == 4: return "redaccion"
-    if est == 3: return "licitacion"
+    s = 0 if (est is None or est == "") else int(est)
+    if s >= 8: return "finalizada"
+    if s == 7: return "ejecucion"
+    if s == 6: return "licitacion-obra"
+    if s == 5: return "proyecto"
+    if s == 4: return "redaccion"
+    if s == 3: return "licitacion"
     return "pendiente"
 
 def responsable(macro):
@@ -65,6 +66,25 @@ class Handler(BaseHTTPRequestHandler):
             cur.execute("SELECT name FROM sqlite_master WHERE type='table' AND name NOT LIKE 'sqlite_%'")
             tablas = [r[0] for r in cur.fetchall()]; conn.close()
             return self.send_json({"tables": tablas})
+        elif path.startswith("/db_data/"):
+            parts = path.split("/")
+            t = parts[-1] if len(parts) > 3 else ""
+            query_str = self.path.split("?")[1] if "?" in self.path else ""
+            params = {}
+            if query_str:
+                for pair in query_str.split("&"):
+                    if "=" in pair:
+                        k, v = pair.split("=", 1)
+                        params[k] = v
+            page = int(params.get("page", 1))
+            limit = int(params.get("limit", 100))
+            offset = (page - 1) * limit
+            conn = sqlite3.connect(DB_BE); cur = conn.cursor()
+            cur.execute(f'SELECT * FROM "{t}" LIMIT ? OFFSET ?', (limit, offset))
+            cols = [c[0] for c in cur.description]
+            rows = cur.fetchall()
+            conn.close()
+            return self.send_json({"table": t, "columns": cols, "data": [dict(zip(cols, r)) for r in rows], "page": page, "limit": limit, "offset": offset})
         elif path.startswith("/db_schema/"):
             t = path.split("/")[-1]; conn = sqlite3.connect(DB_BE); cur = conn.cursor()
             cur.execute(f'SELECT * FROM "{t}" WHERE 1=0')
